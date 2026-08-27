@@ -2,3 +2,7 @@
 *.mp4
 *.webm
 Subtitled/
+
+# 字幕中间文件（转写/机翻/双语产物）
+*.srt
+*.ass
