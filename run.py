@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 一键字幕工具
-用法：python run.py "视频文件"
+用法：
+  python run.py                 # 自动处理 input/ 目录下所有视频
+  python run.py "视频文件"        # 处理指定单个视频
 
-自动完成：识别英文语音 -> 机翻中文 -> 生成双语字幕 -> 烧录成 mp4
-输出：Subtitled/<视频名>.mp4（脚本所在目录下）
+目录结构（脚本所在目录下）：
+  input/           放原始视频
+  output/          加字幕后成品 mp4
+  intermediate/    中间文件（.srt / .ass）
 
-支持 mp4 / webm 等 ffmpeg 能识别的格式。
-自动检测 NVIDIA GPU：有 GPU 用 CUDA 转写 + NVENC 烧录，无 GPU 则回退 CPU。
+自动检测 NVIDIA GPU：有则 CUDA 转写 + NVENC 烧录，无则回退 CPU。
 """
 import os
 import sys
@@ -16,18 +19,18 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.join(BASE_DIR, "Subtitled")
-os.makedirs(OUT_DIR, exist_ok=True)
+os.chdir(BASE_DIR)
+
+IN_DIR = os.path.join(BASE_DIR, "input")
+OUT_DIR = os.path.join(BASE_DIR, "output")
+INTER_DIR = os.path.join(BASE_DIR, "intermediate")
+for d in (IN_DIR, OUT_DIR, INTER_DIR):
+    os.makedirs(d, exist_ok=True)
 
 from faster_whisper import WhisperModel
 from deep_translator import GoogleTranslator, MyMemoryTranslator
 
-VIDEO = os.path.abspath(sys.argv[1])
-BASE = os.path.splitext(VIDEO)[0]
-EN_SRT = BASE + ".en.srt"
-ZH_SRT = BASE + ".zh.srt"
-ASS_FILE = BASE + ".zh_en.ass"
-OUT = os.path.join(OUT_DIR, os.path.basename(os.path.splitext(VIDEO)[0]) + ".mp4")
+VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".mov", ".avi", ".flv", ".ts", ".m4v")
 
 
 def run(cmd):
@@ -190,7 +193,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 def burn(video, out, ass_text, device):
-    tmp = "_subs_tmp.ass"
+    tmp = os.path.join(BASE_DIR, "_subs_tmp.ass")
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(ass_text)
     part = out + ".part.mp4"
@@ -222,45 +225,72 @@ def burn(video, out, ass_text, device):
             os.remove(tmp)
 
 
-def main():
-    if not os.path.exists(VIDEO):
-        print("文件不存在：%s" % VIDEO)
-        sys.exit(1)
-    if os.path.exists(OUT):
-        print("输出已存在，跳过：%s" % OUT)
-        return
+def process_one(video, model, device):
+    video = os.path.abspath(video)
+    if not os.path.exists(video):
+        print("文件不存在：%s" % video)
+        return False
 
-    device, compute_type = pick_device()
-    print("输入：%s" % VIDEO)
+    base_name = os.path.splitext(os.path.basename(video))[0]
+    en_srt = os.path.join(INTER_DIR, base_name + ".en.srt")
+    zh_srt = os.path.join(INTER_DIR, base_name + ".zh.srt")
+    ass_file = os.path.join(INTER_DIR, base_name + ".zh_en.ass")
+    out = os.path.join(OUT_DIR, base_name + ".mp4")
+
+    if os.path.exists(out):
+        print("成品已存在，跳过：%s" % out)
+        return True
+
+    print("\n== 处理：%s ==" % video)
     print("设备：%s" % ("GPU (CUDA)" if device == "cuda" else "CPU"))
-
-    w, h = get_res(VIDEO)
+    w, h = get_res(video)
     print("分辨率：%dx%d" % (w, h))
 
-    print("加载模型...", flush=True)
-    model = WhisperModel("small.en", device=device, compute_type=compute_type)
-
-    if os.path.exists(EN_SRT):
-        print("使用已有英文转写：%s" % EN_SRT)
-        items = parse_srt(EN_SRT)
+    if os.path.exists(en_srt):
+        print("使用已有英文转写：%s" % en_srt)
+        items = parse_srt(en_srt)
     else:
-        items = transcribe(model, VIDEO, EN_SRT)
+        items = transcribe(model, video, en_srt)
 
-    if os.path.exists(ZH_SRT):
-        print("使用已有中文翻译：%s" % ZH_SRT)
-        zh = [t for _, _, t in parse_srt(ZH_SRT)]
+    if os.path.exists(zh_srt):
+        print("使用已有中文翻译：%s" % zh_srt)
+        zh = [t for _, _, t in parse_srt(zh_srt)]
     else:
-        zh = translate(items, ZH_SRT)
+        zh = translate(items, zh_srt)
 
     ass_text = make_ass(w, h, items, zh)
-    with open(ASS_FILE, "w", encoding="utf-8") as f:
+    with open(ass_file, "w", encoding="utf-8") as f:
         f.write(ass_text)
 
-    ok, err = burn(VIDEO, OUT, ass_text, device)
+    ok, err = burn(video, out, ass_text, device)
     if not ok:
         print("烧录失败：%s" % err[-500:])
-        sys.exit(1)
-    print("完成 -> %s" % OUT)
+        return False
+    print("完成 -> %s" % out)
+    return True
+
+
+def main():
+    device, compute_type = pick_device()
+    model = WhisperModel("small.en", device=device, compute_type=compute_type)
+
+    args = sys.argv[1:]
+    if args:
+        process_one(args[0], model, device)
+        return
+
+    videos = sorted([f for f in os.listdir(IN_DIR)
+                     if os.path.splitext(f)[1].lower() in VIDEO_EXTS])
+    if not videos:
+        print("input/ 目录下没有视频。请把视频放入 input/，或运行：python run.py \"视频路径\"")
+        return
+
+    print("发现 %d 个视频待处理" % len(videos))
+    ok = 0
+    for v in videos:
+        if process_one(os.path.join(IN_DIR, v), model, device):
+            ok += 1
+    print("\n全部结束：成功 %d / 共 %d" % (ok, len(videos)))
 
 
 if __name__ == "__main__":

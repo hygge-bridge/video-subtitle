@@ -2,20 +2,41 @@
 
 给英文视频自动生成中英双语字幕，并烧录进画面（成片为硬字幕，任意播放器都能显示）。
 
+## 目录结构
+
+```
+.
+├── input/           放原始视频
+├── output/          加字幕后成品 mp4
+├── intermediate/    中间文件（.srt / .ass）
+├── run.py           一键脚本
+└── README.md
+```
+
 ## 使用说明
 
 ### 一键生成（推荐）
 
+1. 把原始视频放进 `input/` 目录。
+2. 运行：
+
+   ```powershell
+   python run.py
+   ```
+
+   会自动处理 `input/` 下所有视频，成品输出到 `output/`，中间文件放在 `intermediate/`。
+
+也可以只处理某一个视频：
+
 ```powershell
 python run.py "视频文件"
-# 支持 mp4 / webm 等 ffmpeg 能识别的格式
 ```
 
-传一个视频文件，自动完成「识别英文 → 机翻中文 → 生成双语字幕 → 烧录成品」，输出到 `Subtitled/<视频名>.mp4`。
+功能：
 
 - 自动检测 NVIDIA GPU：有则 CUDA 转写 + NVENC 烧录，无则回退 CPU
 - 自动按分辨率选字幕字号（1080p / 720p）
-- 断点续跑：`.en.srt` / `.zh.srt` 已存在时会跳过对应步骤，中断后重跑即可继续
+- 断点续跑：`intermediate/` 下 `.en.srt` / `.zh.srt` 已存在时会跳过对应步骤
 
 ### 只要字幕文件（不烧录）
 
@@ -31,7 +52,7 @@ python make_subs.py "视频文件.mp4"
 python batch_subs.py
 ```
 
-遍历脚本所在目录下的 `.mp4` 逐个处理。该脚本为早期版本，稳健性不如 `run.py`，批量场景建议用 `run.py` 逐个或循环调用。
+遍历脚本所在目录下的 `.mp4` 逐个处理。该脚本为早期版本，稳健性不如 `run.py`，批量场景建议用 `run.py` 自动处理 `input/` 目录。
 
 ## 环境要求
 
