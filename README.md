@@ -26,18 +26,18 @@
 
 4. （可选，强烈建议）NVIDIA GPU：转写用 CUDA 加速，烧录用 NVENC 硬编码，速度显著快于纯 CPU。
 
-## 推荐用法：process_video.py
+## 一键入口：run.py（推荐）
 
-最完整的单视频处理脚本，推荐使用。
+传一个视频文件，自动完成全部流程，输出成品。
 
 ```powershell
-python process_video.py "视频文件.webm"
-# 也支持 mp4 等 ffmpeg 能识别的格式
+python run.py "视频文件"
+# 支持 mp4 / webm 等 ffmpeg 能识别的格式
 ```
 
 功能：
 
-- GPU 转写英文（无 GPU 时把脚本里 `device="cuda"` 改回 `device="cpu"`）
+- 自动检测 NVIDIA GPU：有则 CUDA 转写 + NVENC 烧录，无则回退 CPU
 - 并发机翻中文
 - 自动按分辨率选字幕字号（1080p / 720p）
 - 生成双语 ASS 并烧录成 H.264 mp4
@@ -66,7 +66,7 @@ python make_subs.py "视频文件.mp4"
 python batch_subs.py
 ```
 
-> 该脚本为早期版本，翻译并发的稳健性不如 `process_video.py`，批量场景建议改用 `process_video.py` 逐个或循环调用。
+> 该脚本为早期版本，翻译并发的稳健性不如 `run.py`，批量场景建议改用 `run.py` 逐个或循环调用。
 
 ## 字幕样式
 
