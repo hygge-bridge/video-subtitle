@@ -16,7 +16,7 @@ import os
 import sys
 import subprocess
 import threading
-from concurrent.futures import ThreadPoolExecutor
+import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(BASE_DIR)
@@ -138,18 +138,33 @@ def translate_one(t):
     t = t.strip()
     if not t:
         return ""
-    try:
-        return _get_gt().translate(t)
-    except Exception:
+    last = t
+    for _ in range(3):
         try:
-            return MyMemoryTranslator(source="en", target="zh-CN").translate(t)
+            r = _get_gt().translate(t)
+            if r and r.strip():
+                return r
+            last = r
         except Exception:
-            return t
+            time.sleep(1.0)
+    try:
+        r = MyMemoryTranslator(source="en", target="zh-CN").translate(t)
+        if r and r.strip():
+            return r
+        last = r
+    except Exception:
+        pass
+    return last
 
 
 def translate_all(texts):
-    with ThreadPoolExecutor(max_workers=6) as ex:
-        return list(ex.map(translate_one, texts))
+    # 串行翻译，避免并发触发限流；每句多次重试后仍失败才回退原文
+    out = []
+    for i, t in enumerate(texts):
+        out.append(translate_one(t))
+        if i % 20 == 0:
+            print("        已翻译 %d / %d 段" % (i, len(texts)), flush=True)
+    return out
 
 
 def translate(items, zh_srt):
