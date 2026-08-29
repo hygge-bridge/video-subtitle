@@ -13,3 +13,7 @@ intermediate/
 *.webm
 *.srt
 *.ass
+
+# Python 缓存
+__pycache__/
+*.pyc

@@ -36,7 +36,8 @@ python run.py "视频文件"
 
 - 自动检测 NVIDIA GPU：有则 CUDA 转写 + NVENC 烧录，无则回退 CPU
 - 自动按分辨率选字幕字号（1080p / 720p）
-- 断点续跑：`intermediate/` 下 `.en.srt` / `.zh.srt` 已存在时会跳过对应步骤
+- 断点续跑：`intermediate/` 下对应模型标识的 `.en.srt` / `.zh.srt` 已存在时会跳过对应步骤
+- 语音识别使用 faster-whisper `large-v3` 模型（最准），首次运行会自动下载模型
 
 ### 只要字幕文件（不烧录）
 

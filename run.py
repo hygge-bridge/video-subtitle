@@ -32,6 +32,9 @@ from deep_translator import GoogleTranslator, MyMemoryTranslator
 
 VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".mov", ".avi", ".flv", ".ts", ".m4v")
 
+# 语音识别模型：large-v3 是 faster-whisper 目前最准的模型（多语言，本脚本固定英文识别）
+MODEL_NAME = "large-v3"
+
 
 def run(cmd):
     return subprocess.run(cmd, cwd=BASE_DIR, capture_output=True)
@@ -101,7 +104,13 @@ def transcribe(model, video, en_srt):
     if os.path.exists(tmp):
         os.remove(tmp)
     print("  [1/3] 识别英文语音（耗时较长）...", flush=True)
-    segments, info = model.transcribe(video, language="en", beam_size=5)
+    segments, info = model.transcribe(
+        video,
+        language="en",
+        beam_size=5,
+        vad_filter=True,          # 滤除静音/音乐段，减少错误转写与幻觉
+        condition_on_previous_text=True,
+    )
     count = 0
     with open(tmp, "w", encoding="utf-8") as f:
         for i, seg in enumerate(segments, 1):
@@ -232,10 +241,11 @@ def process_one(video, model, device):
         return False
 
     base_name = os.path.splitext(os.path.basename(video))[0]
-    en_srt = os.path.join(INTER_DIR, base_name + ".en.srt")
-    zh_srt = os.path.join(INTER_DIR, base_name + ".zh.srt")
-    ass_file = os.path.join(INTER_DIR, base_name + ".zh_en.ass")
-    out = os.path.join(OUT_DIR, base_name + ".mp4")
+    tag = MODEL_NAME.replace("-", "_")
+    en_srt = os.path.join(INTER_DIR, base_name + ".en.%s.srt" % tag)
+    zh_srt = os.path.join(INTER_DIR, base_name + ".zh.%s.srt" % tag)
+    ass_file = os.path.join(INTER_DIR, base_name + ".zh_en.%s.ass" % tag)
+    out = os.path.join(OUT_DIR, base_name + ".%s.mp4" % tag)
 
     if os.path.exists(out):
         print("成品已存在，跳过：%s" % out)
@@ -272,7 +282,16 @@ def process_one(video, model, device):
 
 def main():
     device, compute_type = pick_device()
-    model = WhisperModel("small.en", device=device, compute_type=compute_type)
+    # large-v3 精度优先：GPU 用 float16，显存不足时回退 int8_float16（仍为 GPU 推理）
+    try:
+        model = WhisperModel(MODEL_NAME, device=device, compute_type=compute_type)
+    except Exception as e:
+        if device == "cuda":
+            print("float16 加载失败，回退 int8_float16：%s" % e, flush=True)
+            model = WhisperModel(MODEL_NAME, device="cuda", compute_type="int8_float16")
+        else:
+            raise
+    print("识别模型：%s（%s/%s）" % (MODEL_NAME, device, compute_type), flush=True)
 
     args = sys.argv[1:]
     if args:
