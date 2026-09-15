@@ -35,6 +35,9 @@ VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".mov", ".avi", ".flv", ".ts", ".m4v")
 # 语音识别模型：large-v3 是 faster-whisper 目前最准的模型（多语言，本脚本固定英文识别）
 MODEL_NAME = "large-v3"
 
+# 只识别生成英文字幕，跳过翻译和烧录：python run.py --subs-only [视频]
+SUBS_ONLY = "--subs-only" in sys.argv[1:]
+
 
 def run(cmd):
     return subprocess.run(cmd, cwd=BASE_DIR, capture_output=True)
@@ -277,6 +280,10 @@ def process_one(video, model, device):
     else:
         items = transcribe(model, video, en_srt)
 
+    if SUBS_ONLY:
+        print("已生成英文字幕（识别），跳过翻译和烧录：%s" % en_srt)
+        return True
+
     if os.path.exists(zh_srt):
         print("使用已有中文翻译：%s" % zh_srt)
         zh = [t for _, _, t in parse_srt(zh_srt)]
@@ -308,7 +315,7 @@ def main():
             raise
     print("识别模型：%s（%s/%s）" % (MODEL_NAME, device, compute_type), flush=True)
 
-    args = sys.argv[1:]
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if args:
         process_one(args[0], model, device)
         return

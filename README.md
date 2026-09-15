@@ -32,12 +32,22 @@
 python run.py "视频文件"
 ```
 
+### 只识别生成英文字幕（跳过翻译和烧录）
+
+```powershell
+python run.py --subs-only                # input/ 下所有视频
+python run.py --subs-only "视频文件"      # 指定单个视频
+```
+
+只做语音识别，生成英文 `.srt` 到 `intermediate/`，不翻译、不烧录，适合只想拿到字幕再自行处理的情况。
+
 功能：
 
 - 自动检测 NVIDIA GPU：有则 CUDA 转写 + NVENC 烧录，无则回退 CPU
 - 自动按分辨率选字幕字号（1080p / 720p）
 - 断点续跑：`intermediate/` 下对应模型标识的 `.en.srt` / `.zh.srt` 已存在时会跳过对应步骤
 - 语音识别使用 faster-whisper `large-v3` 模型（最准），首次运行会自动下载模型
+- `--subs-only` 模式只执行识别，不翻译不烧录
 
 ### 只要字幕文件（不烧录）
 
