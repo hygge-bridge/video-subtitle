@@ -110,6 +110,44 @@ def parse_srt(path):
     return items
 
 
+def merge_sentences(segments):
+    """按句末标点(. ! ?)逐词拼成完整句子，实现“一句话一条字幕”。
+
+    VAD 可能把一句切成多段，连续长段又可能含多句。这里逐词累积，
+    遇到以句末标点结尾的词就断句；起止时间精确到整句首词到句末词。
+    无词级时间戳时回退为整段作为一句。
+    """
+    import re
+
+    def iter_words():
+        for seg in segments:
+            words = getattr(seg, "words", None)
+            if words:
+                for w in words:
+                    yield (w.word or "").strip(), w.start, w.end
+            else:
+                yield (seg.text or "").strip(), seg.start, seg.end
+
+    buf = []
+    sent_start = None
+    last_end = None
+    for token, start, end in iter_words():
+        if not token:
+            continue
+        if not buf:
+            sent_start = start
+        buf.append(token)
+        last_end = end
+        if token.endswith((".", "!", "?")):
+            joined = re.sub(r"\s+([,.;:!?])", r"\1", " ".join(buf)).strip()
+            yield sent_start, last_end, joined
+            buf = []
+            sent_start = None
+    if buf:
+        joined = re.sub(r"\s+([,.;:!?])", r"\1", " ".join(buf)).strip()
+        yield sent_start, last_end, joined
+
+
 def transcribe(model, video, en_srt):
     tmp = en_srt + ".tmp"
     if os.path.exists(tmp):
@@ -120,17 +158,18 @@ def transcribe(model, video, en_srt):
         language="en",
         beam_size=5,
         vad_filter=True,          # 滤除静音/音乐段，减少错误转写与幻觉
+        word_timestamps=True,     # 词级时间戳，供按句末标点精确断句
         condition_on_previous_text=not FAST,   # --fast 时关闭，片段可独立并行、不互相等待
     )
     count = 0
     with open(tmp, "w", encoding="utf-8") as f:
-        for i, seg in enumerate(segments, 1):
-            f.write("%d\n%s --> %s\n%s\n\n" % (i, srt_ts(seg.start), srt_ts(seg.end), seg.text.strip()))
+        for i, (start, end, text) in enumerate(merge_sentences(segments), 1):
+            f.write("%d\n%s --> %s\n%s\n\n" % (i, srt_ts(start), srt_ts(end), text))
             count = i
             if i % 100 == 0:
-                print("        已识别 %d 段（~%.0f 分钟）" % (i, seg.end / 60.0), flush=True)
+                print("        已生成 %d 句字幕（~%.0f 分钟）" % (i, end / 60.0), flush=True)
     os.replace(tmp, en_srt)
-    print("  识别完成，共 %d 段" % count, flush=True)
+    print("  识别完成，共 %d 句" % count, flush=True)
     return parse_srt(en_srt)
 
 

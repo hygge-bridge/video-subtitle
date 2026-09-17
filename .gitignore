@@ -4,6 +4,7 @@ input/
 # 加字幕后成品
 output/
 Subtitled/
+final_videos/
 
 # 中间文件目录（转写/机翻/双语字幕）
 intermediate/
