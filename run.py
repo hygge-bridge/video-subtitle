@@ -42,8 +42,9 @@ SUBS_ONLY = "--subs-only" in sys.argv[1:]
 # python run.py --fast
 FAST = "--fast" in sys.argv[1:]
 # 并发数：本机 RTX 5060 8GB 显存 + 32 核 CPU。8GB 显存是上限，large-v3
-# 权重约 3GB，每路并发额外占激活内存，取 2 最稳（能并行又不爆显存）。
-FAST_WORKERS = 2
+# 权重约 3GB，每路并发额外占激活内存。只做识别(不烧录)时显存占用小，
+# 32 核 CPU 有大量余量，取 3 可进一步填满 GPU 空隙又不爆显存。
+FAST_WORKERS = 3
 
 
 def run(cmd):
