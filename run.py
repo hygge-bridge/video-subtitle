@@ -38,6 +38,13 @@ MODEL_NAME = "large-v3"
 # 只识别生成英文字幕，跳过翻译和烧录：python run.py --subs-only [视频]
 SUBS_ONLY = "--subs-only" in sys.argv[1:]
 
+# 快跑模式：尽量榨干资源。输入多个视频时并发识别/处理，单项转写取消串行依赖。
+# python run.py --fast
+FAST = "--fast" in sys.argv[1:]
+# 并发数：本机 RTX 5060 8GB 显存 + 32 核 CPU。8GB 显存是上限，large-v3
+# 权重约 3GB，每路并发额外占激活内存，取 2 最稳（能并行又不爆显存）。
+FAST_WORKERS = 2
+
 
 def run(cmd):
     return subprocess.run(cmd, cwd=BASE_DIR, capture_output=True)
@@ -112,7 +119,7 @@ def transcribe(model, video, en_srt):
         language="en",
         beam_size=5,
         vad_filter=True,          # 滤除静音/音乐段，减少错误转写与幻觉
-        condition_on_previous_text=True,
+        condition_on_previous_text=not FAST,   # --fast 时关闭，片段可独立并行、不互相等待
     )
     count = 0
     with open(tmp, "w", encoding="utf-8") as f:
@@ -326,11 +333,21 @@ def main():
         print("input/ 目录下没有视频。请把视频放入 input/，或运行：python run.py \"视频路径\"")
         return
 
+    from concurrent.futures import ThreadPoolExecutor
+
     print("发现 %d 个视频待处理" % len(videos))
     ok = 0
-    for v in videos:
-        if process_one(os.path.join(IN_DIR, v), model, device):
-            ok += 1
+    if FAST and len(videos) > 1:
+        workers = min(FAST_WORKERS, len(videos))
+        print("--fast 模式：并发处理（%d 个同时进行），以榨干系统资源" % workers)
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            results = list(ex.map(
+                lambda v: process_one(os.path.join(IN_DIR, v), model, device), videos))
+        ok = sum(1 for r in results if r)
+    else:
+        for v in videos:
+            if process_one(os.path.join(IN_DIR, v), model, device):
+                ok += 1
     print("\n全部结束：成功 %d / 共 %d" % (ok, len(videos)))
 
 

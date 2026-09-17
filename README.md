@@ -41,6 +41,18 @@ python run.py --subs-only "视频文件"      # 指定单个视频
 
 只做语音识别，生成英文 `.srt` 到 `intermediate/`，不翻译、不烧录，适合只想拿到字幕再自行处理的情况。
 
+### 快跑模式（榨干系统资源）
+
+```powershell
+python run.py --fast                       # input/ 下多个视频并发处理
+python run.py --fast --subs-only           # 快跑 + 只识别不翻译不烧录
+```
+
+适合处理时不需要留给其它程序占用资源的场景（不打游戏、只是切换微信/浏览器）。
+
+- 同时处理多个视频（默认并发 2 个，按本机 8GB 显存/32 核 CPU 配置；可在 `run.py` 的 `FAST_WORKERS` 调整）
+- 单个视频识别时关闭串行依赖（`condition_on_previous_text=False`），让语音片段独立并行，不再互相等待
+
 功能：
 
 - 自动检测 NVIDIA GPU：有则 CUDA 转写 + NVENC 烧录，无则回退 CPU
