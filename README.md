@@ -41,6 +41,15 @@ python run.py --subs-only "视频文件"      # 指定单个视频
 
 只做语音识别，生成英文 `.srt` 到 `intermediate/`，不翻译、不烧录，适合只想拿到字幕再自行处理的情况。
 
+### 只烧录英文字幕（不翻译）
+
+```powershell
+python run.py --no-translate                # input/ 下所有视频
+python run.py --no-translate "视频文件"      # 指定单个视频
+```
+
+只做语音识别 + 烧录英文原字幕到成品 mp4，跳过机翻中文，适合不需要中文翻译、只要英文原字幕的场景。
+
 ### 快跑模式（榨干系统资源）
 
 ```powershell
@@ -61,6 +70,7 @@ python run.py --fast --subs-only           # 快跑 + 只识别不翻译不烧�
 - 语音识别使用 faster-whisper `large-v3` 模型（最准），首次运行会自动下载模型
 - 字幕按语音停顿自然分段（whisper 原生输出，不做句末标点合并）
 - `--subs-only` 模式只执行识别，不翻译不烧录
+- `--no-translate` 模式只执行识别 + 烧录英文字幕，不翻译
 
 ### 只要字幕文件（不烧录）
 

@@ -38,6 +38,9 @@ MODEL_NAME = "large-v3"
 # 只识别生成英文字幕，跳过翻译和烧录：python run.py --subs-only [视频]
 SUBS_ONLY = "--subs-only" in sys.argv[1:]
 
+# 只烧录英文字幕（识别但不翻译）：python run.py --no-translate [视频]
+NO_TRANSLATE = "--no-translate" in sys.argv[1:]
+
 # 快跑模式：尽量榨干资源。输入多个视频时并发识别/处理，单项转写取消串行依赖。
 # python run.py --fast
 FAST = "--fast" in sys.argv[1:]
@@ -227,6 +230,36 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return "".join(lines)
 
 
+def make_ass_en(w, h, items):
+    """生成纯英文字幕 ASS（--no-translate 不翻译时用）。"""
+    if h >= 900:
+        en_fs, en_mv = 46, 70
+    else:
+        en_fs, en_mv = 36, 50
+    head = """[Script Info]
+ScriptType: v4.00+
+PlayResX: %d
+PlayResY: %d
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: EN,Arial,%d,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,0,2,30,30,%d,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+""" % (w, h, en_fs, en_mv)
+    lines = [head]
+    for (s, e, en_text) in items:
+        st = ass_ts(s)
+        et = ass_ts(e)
+        en = en_text.replace("\n", " ")
+        lines.append("Dialogue: 0,%s,%s,EN,,0,0,0,,%s\n" % (st, et, en))
+    return "".join(lines)
+
+
 def burn(video, out, ass_text, device):
     tmp = os.path.join(BASE_DIR, "_subs_tmp.ass")
     with open(tmp, "w", encoding="utf-8") as f:
@@ -290,6 +323,19 @@ def process_one(video, model, device):
 
     if SUBS_ONLY:
         print("已生成英文字幕（识别），跳过翻译和烧录：%s" % en_srt)
+        return True
+
+    if NO_TRANSLATE:
+        print("--no-translate：跳过翻译，直接烧录英文字幕", flush=True)
+        ass_text = make_ass_en(w, h, items)
+        ass_en_file = os.path.join(INTER_DIR, base_name + ".en.%s.ass" % tag)
+        with open(ass_en_file, "w", encoding="utf-8") as f:
+            f.write(ass_text)
+        ok, err = burn(video, out, ass_text, device)
+        if not ok:
+            print("烧录失败：%s" % err[-500:])
+            return False
+        print("完成 -> %s" % out)
         return True
 
     if os.path.exists(zh_srt):
